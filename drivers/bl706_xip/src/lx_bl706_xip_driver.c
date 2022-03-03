@@ -37,11 +37,11 @@
 /* marco ---------------------------------------------------------------------*/
 #define LX_BL706_WRITE_DEBUG_DISABLE
 #define LX_BL706_READ_DEBUG_DISABLE
-// #define LX_BL706_ERASE_DEBUG_DISABLE
+#define LX_BL706_ERASE_DEBUG_DISABLE
 
-#ifndef LX_DIRECT_READ
+// #ifndef LX_DIRECT_READ
 static uint8_t xip_sector_memory[LX_BL706_XIP_DISK_BYTES_PER_BLOCK/4];
-#endif
+// #endif
 
 /* typedef -------------------------------------------------------------------*/
 
@@ -53,7 +53,7 @@ static UINT lx_bl706_xip_driver_block_erased_verify(ULONG block);
 static UINT lx_bl706_xip_driver_system_error(UINT error_code);
 
 /* variable ------------------------------------------------------------------*/
-static UINT is_initialized = LX_FALSE;
+
 
 /* code ----------------------------------------------------------------------*/
 
@@ -66,25 +66,21 @@ UINT lx_bl706_xip_driver_initialize(LX_NOR_FLASH *nor_flash)
 {
     UINT ret = LX_SUCCESS;
 
-    if (is_initialized == LX_FALSE)
-    {
-        nor_flash->lx_nor_flash_base_address = (ULONG *)LX_BL706_XIP_DISK_BASE_ADDRESS;
+    nor_flash->lx_nor_flash_base_address = (ULONG *)LX_BL706_XIP_DISK_BASE_ADDRESS;
 
-        nor_flash->lx_nor_flash_total_blocks = LX_BL706_XIP_DISK_TOTAL_BLOCK;
-        nor_flash->lx_nor_flash_words_per_block = LX_BL706_XIP_DISK_WORDS_PER_BLOCK;
+    nor_flash->lx_nor_flash_total_blocks = LX_BL706_XIP_DISK_TOTAL_BLOCK;
+    nor_flash->lx_nor_flash_words_per_block = LX_BL706_XIP_DISK_WORDS_PER_BLOCK;
 
-        nor_flash->lx_nor_flash_driver_read = lx_bl706_xip_driver_read;
-        nor_flash->lx_nor_flash_driver_write = lx_bl706_xip_driver_write;
-        nor_flash->lx_nor_flash_driver_block_erase = lx_bl706_xip_driver_block_erase;
-        nor_flash->lx_nor_flash_driver_block_erased_verify = lx_bl706_xip_driver_block_erased_verify;
+    nor_flash->lx_nor_flash_driver_read = lx_bl706_xip_driver_read;
+    nor_flash->lx_nor_flash_driver_write = lx_bl706_xip_driver_write;
+    nor_flash->lx_nor_flash_driver_block_erase = lx_bl706_xip_driver_block_erase;
+    nor_flash->lx_nor_flash_driver_block_erased_verify = lx_bl706_xip_driver_block_erased_verify;
 
-        nor_flash->lx_nor_flash_driver_system_error = lx_bl706_xip_driver_system_error;
+    nor_flash->lx_nor_flash_driver_system_error = lx_bl706_xip_driver_system_error;
 
 #ifndef LX_DIRECT_READ
         nor_flash->lx_nor_flash_sector_buffer = (ULONG *)xip_sector_memory;
 #endif
-        is_initialized = LX_TRUE;
-    }
 
     return ret;
 }
