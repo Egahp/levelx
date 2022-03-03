@@ -31,13 +31,15 @@ extern "C" {
 
 extern uint32_t __levelx_start__;
 extern uint32_t __levelx_end__;
-extern uint32_t __levelx_start_offsest__;
+extern uint32_t __levelx_start_offset__;
 
-#define LX_BL706_XIP_DISK_BASE_ADDRESS        ((uint32_t)(&__levelx_start__) - (uint32_t)(&__levelx_start_offsest__))
 #define LX_BL706_XIP_DISK_SIZE                ((uint32_t)( (((uint32_t)(&__levelx_end__) - (uint32_t)(&__levelx_start__))) & 0xFFFFC000))
 #define LX_BL706_XIP_DISK_BYTES_PER_BLOCK     ((ULONG)(4096))
 #define LX_BL706_XIP_DISK_WORDS_PER_BLOCK     ((ULONG)(LX_BL706_XIP_DISK_BYTES_PER_BLOCK / 4))
 #define LX_BL706_XIP_DISK_TOTAL_BLOCK         ((ULONG)(LX_BL706_XIP_DISK_SIZE / LX_BL706_XIP_DISK_BYTES_PER_BLOCK))
+
+#define LX_BL706_XIP_DISK_BASE_ADDRESS        ((uint32_t)(&__levelx_start__) - (uint32_t)(&__levelx_start_offset__))
+#define LX_BL706_XIP_DISK_BASE_BLOCK          ((uint32_t)LX_BL706_XIP_DISK_BASE_ADDRESS / LX_BL706_XIP_DISK_BYTES_PER_BLOCK)
 
 UINT lx_bl706_xip_driver_initialize(LX_NOR_FLASH *nor_flash);
 

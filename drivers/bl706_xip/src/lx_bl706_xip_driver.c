@@ -23,6 +23,7 @@
 
 /* include -------------------------------------------------------------------*/
 #include "lx_bl706_xip_driver.h"
+#include "lx_api.h"
 
 #include "string.h"
 #include "bflb_platform.h"
@@ -34,9 +35,12 @@
 #include "bl702_xip_sflash.h"
 #include "bl702_xip_sflash_ext.h"
 /* marco ---------------------------------------------------------------------*/
+#define LX_BL706_WRITE_DEBUG_DISABLE
+#define LX_BL706_READ_DEBUG_DISABLE
+// #define LX_BL706_ERASE_DEBUG_DISABLE
 
 #ifndef LX_DIRECT_READ
-static uint32_t xip_sector_memory[LX_BL706_XIP_DISK_BYTES_PER_BLOCK / 4];
+static uint8_t xip_sector_memory[LX_BL706_XIP_DISK_BYTES_PER_BLOCK/4];
 #endif
 
 /* typedef -------------------------------------------------------------------*/
@@ -48,13 +52,16 @@ static UINT lx_bl706_xip_driver_block_erase(ULONG block, ULONG erase_count);
 static UINT lx_bl706_xip_driver_block_erased_verify(ULONG block);
 static UINT lx_bl706_xip_driver_system_error(UINT error_code);
 
-/*!< xip dirver glue */
-static BL_Err_Type flash_erase_glue(uint32_t block, uint32_t erase_count);
-
 /* variable ------------------------------------------------------------------*/
 static UINT is_initialized = LX_FALSE;
 
 /* code ----------------------------------------------------------------------*/
+
+/**
+ *   @brief         初始化  
+ *   @param  nor_flash              要初始化的nor flash
+ *   @return UINT 
+ */
 UINT lx_bl706_xip_driver_initialize(LX_NOR_FLASH *nor_flash)
 {
     UINT ret = LX_SUCCESS;
@@ -74,7 +81,7 @@ UINT lx_bl706_xip_driver_initialize(LX_NOR_FLASH *nor_flash)
         nor_flash->lx_nor_flash_driver_system_error = lx_bl706_xip_driver_system_error;
 
 #ifndef LX_DIRECT_READ
-        nor_flash->lx_nor_flash_sector_buffer = xip_sector_memory;
+        nor_flash->lx_nor_flash_sector_buffer = (ULONG *)xip_sector_memory;
 #endif
         is_initialized = LX_TRUE;
     }
@@ -82,11 +89,29 @@ UINT lx_bl706_xip_driver_initialize(LX_NOR_FLASH *nor_flash)
     return ret;
 }
 
+/**
+ *   @brief         读取
+ *   @param  flash_address          要读取的地址
+ *   @param  destination            数据缓冲区
+ *   @param  words                  要读取的字数
+ *   @return UINT 
+ */
 static UINT lx_bl706_xip_driver_read(ULONG *flash_address, ULONG *destination, ULONG words)
 {
     UINT ret = LX_SUCCESS;
 
-    if (flash_read((uint32_t)flash_address, (uint8_t)destination, (words * 4)) !=  SUCCESS)
+#ifndef LX_BL706_READ_DEBUG_DISABLE
+    LOG_D("levelx driver read, addr [0x%08x], size [%d]\r\n", (uint32_t)flash_address, (words * 4));
+#endif
+
+    /*!< DONE 通过系统总线访问方法因为cache 原因，flash无法通过cache写策略更新脏数据，需要每次清除cache，反而降低速度 */
+    // volatile uint32_t *ptr = (uint32_t*)(0x23000000 + ((uint32_t)flash_address) - 0x2000);
+
+    // for (uint32_t i=0;i<words;i++){
+    //     *destination++ = *ptr++;
+    // }
+
+    if (flash_read((uint32_t)flash_address, (uint8_t*)destination, (words * 4)) !=  SUCCESS)
     {
         ret = LX_ERROR;
     }
@@ -94,11 +119,22 @@ static UINT lx_bl706_xip_driver_read(ULONG *flash_address, ULONG *destination, U
     return ret;
 }
 
+/**
+ *   @brief         写入
+ *   @param  flash_address          要写入的地址
+ *   @param  source                 要写入的数据
+ *   @param  words                  要写入的字数
+ *   @return UINT 
+ */
 static UINT lx_bl706_xip_driver_write(ULONG *flash_address, ULONG *source, ULONG words)
 {
     UINT ret = LX_SUCCESS;
 
-    if (flash_write((uint32_t)flash_address, (uint8_t)source, (words * 4)) !=  SUCCESS)
+#ifndef LX_BL706_WRITE_DEBUG_DISABLE
+    LOG_D("levelx driver write, addr [0x%08x], size [%d]\r\n", (uint32_t)flash_address, (words * 4));
+#endif
+
+    if (flash_write((uint32_t)flash_address, (uint8_t*)source, (words * 4)) !=  SUCCESS)
     {
         ret = LX_ERROR;
     }
@@ -106,13 +142,21 @@ static UINT lx_bl706_xip_driver_write(ULONG *flash_address, ULONG *source, ULONG
     return ret;
 }
 
+/**
+ *   @brief         擦除指定块
+ *   @param  block                  要擦除的块
+ *   @param  erase_count            这个块被擦除的次数
+ *   @return UINT 
+ */
 static UINT lx_bl706_xip_driver_block_erase(ULONG block, ULONG erase_count)
 {
     UINT ret = LX_SUCCESS;
-    uint32_t start_address = block * LX_BL706_XIP_DISK_BYTES_PER_BLOCK;
-    uint32_t erase_byte = erase_count * LX_BL706_XIP_DISK_BYTES_PER_BLOCK;
 
-    if (flash_erase_glue(block, erase_count) !=  SUCCESS)
+#ifndef LX_BL706_ERASE_DEBUG_DISABLE
+    LOG_D("levelx driver erase, block [%d], erase count [%d]\r\n", block, erase_count);
+#endif
+
+    if (flash_erase(LX_BL706_XIP_DISK_BASE_ADDRESS + block * LX_BL706_XIP_DISK_BYTES_PER_BLOCK, LX_BL706_XIP_DISK_BYTES_PER_BLOCK) !=  SUCCESS)
     {
         ret = LX_ERROR;
     }
@@ -120,92 +164,31 @@ static UINT lx_bl706_xip_driver_block_erase(ULONG block, ULONG erase_count)
     return ret;
 }
 
+/**
+ *   @brief         擦除校验
+ *   @param  block                  要校验的快
+ *   @return UINT 
+ */
 static UINT lx_bl706_xip_driver_block_erased_verify(ULONG block)
 {
     UINT ret = LX_SUCCESS;
 
+#ifndef LX_BL706_ERASE_DEBUG_DISABLE
+    LOG_D("levelx driver erase verify, block [%d]\r\n", block);
+#endif
+
     return ret;
 }
 
+/**
+ *   @brief         错误处理
+ *   @param  error_code             
+ *   @return UINT 
+ */
 static UINT  lx_bl706_xip_driver_system_error(UINT error_code)
 {
     UINT ret = LX_ERROR;
     LOG_E("levelx xip driver system error [ %d ]\r\n", error_code);
-    return ret;
-}
-
-/*!< xip dirver glue */
-
-extern SPI_Flash_Cfg_Type g_flash_cfg;
-
-static BL_Err_Type ATTR_TCM_SECTION SFlash_Erase_glue(SPI_Flash_Cfg_Type *flashCfg, uint32_t block, uint32_t erase_count)
-{
-    BL_Err_Type ret = SUCCESS;
-    uint32_t end_block = block + erase_count;
-
-    while (block < end_block)
-    {
-        erase_count = end_block - block;
-        /*!< 支持64k擦除, block 64k对齐且剩余擦除长度大于64K */
-        if ((flashCfg->blk64EraseCmd != BFLB_SPIFLASH_CMD_INVALID)
-            && ((block & 0xF) == 0)
-            && (erase_count >= 16))
-        {
-            ret = SFlash_Blk64_Erase(flashCfg, block);
-            block += 16;
-        }
-
-        /*!< 支持32k擦除, block 32k对齐且剩余擦除长度大于32K */
-        else if ((flashCfg->blk32EraseCmd != BFLB_SPIFLASH_CMD_INVALID)
-            && ((block & 0x7) == 0)
-            && (erase_count >= 8))
-        {
-            ret = SFlash_Blk32_Erase(flashCfg, block);
-            block += 8;
-        }
-
-        /*!< 擦除一个block */
-        else{
-            ret = SFlash_Sector_Erase(flashCfg, block);
-            block++;
-        }
-
-        if (ret != SUCCESS)
-        {
-            return ERROR;
-        }
-    }
-
-    return SUCCESS;
-}
-
-static BL_Err_Type ATTR_TCM_SECTION XIP_SFlash_Erase_Need_Lock_glue(SPI_Flash_Cfg_Type *pFlashCfg, SF_Ctrl_IO_Type ioMode, uint32_t block, uint32_t erase_count)
-{
-    BL_Err_Type stat;
-    uint32_t offset;
-
-    stat = XIP_SFlash_State_Save(pFlashCfg, &offset);
-
-    if (stat != SUCCESS) {
-        SFlash_Set_IDbus_Cfg(pFlashCfg, ioMode, 1, 0, 32);
-    } else {
-        stat = SFlash_Erase_glue(pFlashCfg, block, erase_count);
-        XIP_SFlash_State_Restore(pFlashCfg, ioMode, offset);
-    }
-
-    return stat;
-}
-
-static BL_Err_Type ATTR_TCM_SECTION flash_erase_glue(uint32_t block, uint32_t erase_count)
-{
-    BL_Err_Type ret = ERROR;
-
-    cpu_global_irq_disable();
-    XIP_SFlash_Opt_Enter();
-    ret = XIP_SFlash_Erase_Need_Lock_glue(&g_flash_cfg, g_flash_cfg.ioMode & 0xf, block, erase_count);
-    XIP_SFlash_Opt_Exit();
-    cpu_global_irq_enable();
-
     return ret;
 }
 
