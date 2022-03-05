@@ -84,6 +84,8 @@ UINT lx_bl706_xip_driver_initialize(LX_NOR_FLASH *nor_flash)
 
     return ret;
 }
+#include "bl702_l1c.h"
+#include "bl702_common.h"
 
 /**
  *   @brief         读取
@@ -100,12 +102,20 @@ static UINT lx_bl706_xip_driver_read(ULONG *flash_address, ULONG *destination, U
     LOG_D("levelx driver read, addr [0x%08x], size [%d]\r\n", (uint32_t)flash_address, (words * 4));
 #endif
 
-    /*!< DONE 通过系统总线访问方法因为cache 原因，flash无法通过cache写策略更新脏数据，需要每次清除cache，反而降低速度 */
+    /*!< DONE 通过系统总线访问方法因为cache 原因，flash无法通过cache写策略更新脏数据，需要先关闭cache */
+    
+    // uint32_t tmpVal = BL_RD_REG(L1C_BASE, L1C_CONFIG);
+    // tmpVal = BL_CLR_REG_BIT(tmpVal, L1C_CACHEABLE);
+    // BL_WR_REG(L1C_BASE, L1C_CONFIG, tmpVal);
+
     // volatile uint32_t *ptr = (uint32_t*)(0x23000000 + ((uint32_t)flash_address) - 0x2000);
 
     // for (uint32_t i=0;i<words;i++){
     //     *destination++ = *ptr++;
     // }
+
+    // tmpVal = BL_SET_REG_BIT(tmpVal, L1C_CACHEABLE);
+    // BL_WR_REG(L1C_BASE, L1C_CONFIG, tmpVal);
 
     if (flash_read((uint32_t)flash_address, (uint8_t*)destination, (words * 4)) !=  SUCCESS)
     {
